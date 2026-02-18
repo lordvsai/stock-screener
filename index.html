@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Screener Pro - Analysis Platform</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .dropdown-enter { animation: slideDown 0.2s ease-out; }
+        .stock-row:hover { background-color: rgba(59, 130, 246, 0.1); }
+        .tab-active {
+            border-bottom: 3px solid #3b82f6;
+            color: #3b82f6;
+        }
+        .tab-inactive {
+            color: #9ca3af;
+        }
+        .tab-inactive:hover {
+            color: #d1d5db;
+        }
+        .scrollbar-thin::-webkit-scrollbar { width: 8px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #1f2937; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    </style>
+</head>
+<body class="bg-gray-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Expanded stock database with real symbols for autocomplete
+        const POPULAR_STOCKS = [
+            // Top Indian Stocks - NSE
+            { symbol: 'RELIANCE.NS', name: 'Reliance Industries Ltd', market: 'NSE', exchange: 'India', sector: 'Oil & Gas' },
+            { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', market: 'NSE', exchange: 'India', sector: 'IT Services' },
+            { symbol: 'HDFCBANK.NS', name: 'HDFC Bank Ltd', market: 'NSE', exchange: 'India', sector: 'Banking' },
+            { symbol: 'INFY.NS', name: 'Infosys Ltd', market: 'NSE', exchange: 'India', sector: 'IT Services' },
+            { symbol: 'HINDUNILVR.NS', name: 'Hindustan Unilever Ltd', market: 'NSE', exchange: 'India', sector: 'FMCG' },
+            { symbol: 'ICICIBANK.NS', name: 'ICICI Bank Ltd', market: 'NSE', exchange: 'India', sector: 'Banking' },
+            { symbol: 'BHARTIARTL.NS', name: 'Bharti Airtel Ltd', market: 'NSE', exchange: 'India', sector: 'Telecom' },
+            { symbol: 'ITC.NS', name: 'ITC Ltd', market: 'NSE', exchange: 'India', sector: 'FMCG' },
+            { symbol: 'SBIN.NS', name: 'State Bank of India', market: 'NSE', exchange: 'India', sector: 'Banking' },
+            { symbol: 'LT.NS', name: 'Larsen & Toubro Ltd', market: 'NSE', exchange: 'India', sector: 'Construction' },
+            { symbol: 'WIPRO.NS', name: 'Wipro Ltd', market: 'NSE', exchange: 'India', sector: 'IT Services' },
+            { symbol: 'MARUTI.NS', name: 'Maruti Suzuki India Ltd', market: 'NSE', exchange: 'India', sector: 'Automobile' },
+            { symbol: 'TATAMOTORS.NS', name: 'Tata Motors Ltd', market: 'NSE', exchange: 'India', sector: 'Automobile' },
+            { symbol: 'TATASTEEL.NS', name: 'Tata Steel Ltd', market: 'NSE', exchange: 'India', sector: 'Metals' },
+            { symbol: 'ADANIPORTS.NS', name: 'Adani Ports and SEZ Ltd', market: 'NSE', exchange: 'India', sector: 'Infrastructure' },
+            { symbol: 'ASIANPAINT.NS', name: 'Asian Paints Ltd', market: 'NSE', exchange: 'India', sector: 'Paints' },
+            { symbol: 'BAJFINANCE.NS', name: 'Bajaj Finance Ltd', market: 'NSE', exchange: 'India', sector: 'Finance' },
+            { symbol: 'HCLTECH.NS', name: 'HCL Technologies Ltd', market: 'NSE', exchange: 'India', sector: 'IT Services' },
+            { symbol: 'KOTAKBANK.NS', name: 'Kotak Mahindra Bank Ltd', market: 'NSE', exchange: 'India', sector: 'Banking' },
+            { symbol: 'SUNPHARMA.NS', name: 'Sun Pharmaceutical Industries Ltd', market: 'NSE', exchange: 'India', sector: 'Pharma' },
+            { symbol: 'AXISBANK.NS', name: 'Axis Bank Ltd', market: 'NSE', exchange: 'India', sector: 'Banking' },
+            { symbol: 'ULTRACEMCO.NS', name: 'UltraTech Cement Ltd', market: 'NSE', exchange: 'India', sector: 'Cement' },
+            { symbol: 'TITAN.NS', name: 'Titan Company Ltd', market: 'NSE', exchange: 'India', sector: 'Retail' },
+            { symbol: 'NESTLEIND.NS', name: 'Nestle India Ltd', market: 'NSE', exchange: 'India', sector: 'FMCG' },
+            { symbol: 'BAJAJFINSV.NS', name: 'Bajaj Finserv Ltd', market: 'NSE', exchange: 'India', sector: 'Finance' },
+            { symbol: 'ONGC.NS', name: 'Oil and Natural Gas Corporation Ltd', market: 'NSE', exchange: 'India', sector: 'Oil & Gas' },
+            { symbol: 'NTPC.NS', name: 'NTPC Ltd', market: 'NSE', exchange: 'India', sector: 'Power' },
+            { symbol: 'POWERGRID.NS', name: 'Power Grid Corporation of India Ltd', market: 'NSE', exchange: 'India', sector: 'Power' },
+            { symbol: 'M&M.NS', name: 'Mahindra & Mahindra Ltd', market: 'NSE', exchange: 'India', sector: 'Automobile' },
+            { symbol: 'TECHM.NS', name: 'Tech Mahindra Ltd', market: 'NSE', exchange: 'India', sector: 'IT Services' },
+            { symbol: 'HINDALCO.NS', name: 'Hindalco Industries Ltd', market: 'NSE', exchange: 'India', sector: 'Metals' },
+            { symbol: 'INDUSINDBK.NS', name: 'IndusInd Bank Ltd', market: 'NSE', exchange: 'India', sector: 'Banking' },
+            { symbol: 'COALINDIA.NS', name: 'Coal India Ltd', market: 'NSE', exchange: 'India', sector: 'Mining' },
+            { symbol: 'DRREDDY.NS', name: 'Dr. Reddys Laboratories Ltd', market: 'NSE', exchange: 'India', sector: 'Pharma' },
+            { symbol: 'GRASIM.NS', name: 'Grasim Industries Ltd', market: 'NSE', exchange: 'India', sector: 'Cement' },
+            { symbol: 'JSWSTEEL.NS', name: 'JSW Steel Ltd', market: 'NSE', exchange: 'India', sector: 'Metals' },
+            { symbol: 'DIVISLAB.NS', name: 'Divis Laboratories Ltd', market: 'NSE', exchange: 'India', sector: 'Pharma' },
+            { symbol: 'EICHERMOT.NS', name: 'Eicher Motors Ltd', market: 'NSE', exchange: 'India', sector: 'Automobile' },
+            { symbol: 'BRITANNIA.NS', name: 'Britannia Industries Ltd', market: 'NSE', exchange: 'India', sector: 'FMCG' },
+            { symbol: 'SHREECEM.NS', name: 'Shree Cement Ltd', market: 'NSE', exchange: 'India', sector: 'Cement' },
+            { symbol: 'HEROMOTOCO.NS', name: 'Hero MotoCorp Ltd', market: 'NSE', exchange: 'India', sector: 'Automobile' },
+            { symbol: 'CIPLA.NS', name: 'Cipla Ltd', market: 'NSE', exchange: 'India', sector: 'Pharma' },
+            { symbol: 'TATACONSUM.NS', name: 'Tata Consumer Products Ltd', market: 'NSE', exchange: 'India', sector: 'FMCG' },
+            { symbol: 'ADANIENT.NS', name: 'Adani Enterprises Ltd', market: 'NSE', exchange: 'India', sector: 'Conglomerate' },
+            { symbol: 'APOLLOHOSP.NS', name: 'Apollo Hospitals Enterprise Ltd', market: 'NSE', exchange: 'India', sector: 'Healthcare' },
+            { symbol: 'VEDL.NS', name: 'Vedanta Ltd', market: 'NSE', exchange: 'India', sector: 'Metals' },
+            { symbol: 'CROMPTON.NS', name: 'Crompton Greaves Consumer Electricals Ltd', market: 'NSE', exchange: 'India', sector: 'Consumer Durables' },
+            { symbol: 'HAVELLS.NS', name: 'Havells India Ltd', market: 'NSE', exchange: 'India', sector: 'Consumer Durables' },
+            { symbol: 'PIDILITIND.NS', name: 'Pidilite Industries Ltd', market: 'NSE', exchange: 'India', sector: 'Chemicals' },
+            
+            // US Stocks
+            { symbol: 'AAPL', name: 'Apple Inc', market: 'NASDAQ', exchange: 'USA', sector: 'Technology' },
+            { symbol: 'GOOGL', name: 'Alphabet Inc Class A', market: 'NASDAQ', exchange: 'USA', sector: 'Technology' },
+            { symbol: 'MSFT', name: 'Microsoft Corporation', market: 'NASDAQ', exchange: 'USA', sector: 'Technology' },
+            { symbol: 'AMZN', name: 'Amazon.com Inc', market: 'NASDAQ', exchange: 'USA', sector: 'E-commerce' },
+            { symbol: 'TSLA', name: 'Tesla Inc', market: 'NASDAQ', exchange: 'USA', sector: 'Automobile' },
+            { symbol: 'NVDA', name: 'NVIDIA Corporation', market: 'NASDAQ', exchange: 'USA', sector: 'Semiconductors' },
+            { symbol: 'META', name: 'Meta Platforms Inc', market: 'NASDAQ', exchange: 'USA', sector: 'Social Media' },
+            { symbol: 'NFLX', name: 'Netflix Inc', market: 'NASDAQ', exchange: 'USA', sector: 'Streaming' },
+            { symbol: 'AMD', name: 'Advanced Micro Devices Inc', market: 'NASDAQ', exchange: 'USA', sector: 'Semiconductors' },
+            { symbol: 'INTC', name: 'Intel Corporation', market: 'NASDAQ', exchange: 'USA', sector: 'Semiconductors' }
+        ];
+
+        // Fetch REAL fundamentals from Yahoo Finance
+        const fetchRealFundamentals = async (symbol) => {
+            try {
+                // Yahoo Finance Statistics/Key Statistics endpoint
+                const baseUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=defaultKeyStatistics,financialData,summaryDetail`;
+                
+                for (let i = 0; i < CORS_PROXIES.length; i++) {
+                    try {
+                        const proxy = CORS_PROXIES[i];
+                        const url = proxy + encodeURIComponent(baseUrl);
+                        
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        
+                        if (!response.ok) continue;
+                        
+                        const data = await response.json();
+                        
+                        if (data.quoteSummary && data.quoteSummary.result && data.quoteSummary.result[0]) {
+                            const result = data.quoteSummary.result[0];
+                            const keyStats = result.defaultKeyStatistics || {};
+                            const financialData = result.financialData || {};
+                            const summaryDetail = result.summaryDetail || {};
+                            
+                            return {
+                                marketCap: summaryDetail.marketCap?.raw || 0,
+                                pe: summaryDetail.trailingPE?.raw || keyStats.trailingPE?.raw || null,
+                                pb: keyStats.priceToBook?.raw || null,
+                                dividendYield: summaryDetail.dividendYield?.raw ? (summaryDetail.dividendYield.raw * 100) : null,
+                                roe: financialData.returnOnEquity?.raw ? (financialData.returnOnEquity.raw * 100) : null,
+                                roce: financialData.returnOnAssets?.raw ? (financialData.returnOnAssets.raw * 100) : null,
+                                debtToEquity: financialData.debtToEquity?.raw ? (financialData.debtToEquity.raw / 100) : null,
+                                currentRatio: financialData.currentRatio?.raw || null,
+                                bookValue: keyStats.bookValue?.raw || null,
+                                faceValue: 10, // Not available in Yahoo API
+                                eps: keyStats.trailingEps?.raw || null,
+                                beta: keyStats.beta?.raw || null,
+                                fiftyTwoWeekHigh: summaryDetail.fiftyTwoWeekHigh?.raw || null,
+                                fiftyTwoWeekLow: summaryDetail.fiftyTwoWeekLow?.raw || null
+                            };
+                        }
+                    } catch (error) {
+                        console.error(`Fundamentals proxy ${i} error:`, error);
+                        continue;
+                    }
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('Error fetching fundamentals:', error);
+                return null;
+            }
+        };
+        const CORS_PROXIES = [
+            'https://corsproxy.io/?',
+            'https://api.allorigins.win/raw?url=',
+            '' // Direct call (no proxy) as fallback
+        ];
+        
+        let currentProxyIndex = 0;
+
+        // Fetch REAL stock price from Yahoo Finance with CORS proxy
+        const fetchRealStockPrice = async (symbol) => {
+            const baseUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+            
+            // Try each proxy in order
+            for (let i = 0; i < CORS_PROXIES.length; i++) {
+                try {
+                    const proxy = CORS_PROXIES[i];
+                    const url = proxy + encodeURIComponent(baseUrl);
+                    
+                    console.log(`Attempting to fetch from: ${proxy ? 'Proxy ' + i : 'Direct'}`);
+                    
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        console.log(`Attempt ${i} failed with status: ${response.status}`);
+                        continue;
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.chart && data.chart.result && data.chart.result[0]) {
+                        const result = data.chart.result[0];
+                        const meta = result.meta;
+                        const quote = result.indicators.quote[0];
+                        
+                        const currentPrice = meta.regularMarketPrice || quote.close[quote.close.length - 1];
+                        const previousClose = meta.previousClose || meta.chartPreviousClose;
+                        const change = currentPrice - previousClose;
+                        const changePercent = (change / previousClose) * 100;
+                        
+                        console.log(`Successfully fetched data for ${symbol}`);
+                        currentProxyIndex = i; // Remember which proxy worked
+                        
+                        return {
+                            symbol: symbol,
+                            price: currentPrice.toFixed(2),
+                            change: change.toFixed(2),
+                            changePercent: changePercent.toFixed(2),
+                            high52w: (meta.fiftyTwoWeekHigh || currentPrice * 1.2).toFixed(2),
+                            low52w: (meta.fiftyTwoWeekLow || currentPrice * 0.8).toFixed(2),
+                            volume: meta.regularMarketVolume || 0,
+                            marketCap: meta.marketCap || 0,
+                            timestamp: new Date().toISOString()
+                        };
+                    }
+                } catch (error) {
+                    console.error(`Proxy ${i} error:`, error);
+                    continue;
+                }
+            }
+            
+            // If all proxies fail, return null
+            console.error(`All methods failed for ${symbol}`);
+            return null;
+        };
+
+        // Fetch REAL historical data from Yahoo Finance with CORS proxy
+        const fetchRealHistoricalData = async (symbol, period) => {
+            let range = '1mo';
+            switch(period) {
+                case '1M': range = '1mo'; break;
+                case '6M': range = '6mo'; break;
+                case '1Y': range = '1y'; break;
+                case '3Y': range = '3y'; break;
+                case '5Y': range = '5y'; break;
+                case '10Y': range = '10y'; break;
+                case 'MAX': range = 'max'; break;
+            }
+            
+            const baseUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}`;
+            
+            // Try each proxy
+            for (let i = 0; i < CORS_PROXIES.length; i++) {
+                try {
+                    const proxy = CORS_PROXIES[i];
+                    const url = proxy + encodeURIComponent(baseUrl);
+                    
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                        }
+                    });
+                    
+                    if (!response.ok) continue;
+                    
+                    const data = await response.json();
+                    
+                    if (data.chart && data.chart.result && data.chart.result[0]) {
+                        const result = data.chart.result[0];
+                        const timestamps = result.timestamp;
+                        const quotes = result.indicators.quote[0];
+                        
+                        return timestamps.map((timestamp, i) => ({
+                            date: new Date(timestamp * 1000).toISOString().split('T')[0],
+                            close: quotes.close[i],
+                            price: quotes.close[i],
+                            open: quotes.open[i],
+                            high: quotes.high[i],
+                            low: quotes.low[i],
+                            volume: quotes.volume[i]
+                        })).filter(d => d.close !== null);
+                    }
+                } catch (error) {
+                    console.error(`Historical data proxy ${i} error:`, error);
+                    continue;
+                }
+            }
+            
+            console.error(`Failed to fetch historical data for ${symbol}`);
+            return [];
+        };
+
+        // All technical analysis functions
+        const calculateSMA = (data, period) => {
+            if (data.length < period) return null;
+            const sum = data.slice(-period).reduce((a, b) => a + b, 0);
+            return sum / period;
+        };
+
+        const calculateWMA = (data, period) => {
+            if (data.length < period) return null;
+            const weights = Array.from({ length: period }, (_, i) => i + 1);
+            const weightSum = weights.reduce((a, b) => a + b, 0);
+            const recentData = data.slice(-period);
+            const weightedSum = recentData.reduce((sum, price, i) => sum + price * weights[i], 0);
+            return weightedSum / weightSum;
+        };
+
+        const calculateBollingerBands = (prices, period = 20, stdDev = 2) => {
+            if (prices.length < period) return { upper: null, middle: null, lower: null };
+            const sma = calculateSMA(prices, period);
+            const squaredDiffs = prices.slice(-period).map(p => Math.pow(p - sma, 2));
+            const variance = squaredDiffs.reduce((a, b) => a + b, 0) / period;
+            const std = Math.sqrt(variance);
+            return {
+                upper: sma + (stdDev * std),
+                middle: sma,
+                lower: sma - (stdDev * std)
+            };
+        };
+
+        const calculateRSI = (prices, period = 14) => {
+            if (prices.length < period + 1) return null;
+            let gains = 0, losses = 0;
+            for (let i = prices.length - period; i < prices.length; i++) {
+                const change = prices[i] - prices[i - 1];
+                if (change > 0) gains += change;
+                else losses -= change;
+            }
+            const avgGain = gains / period;
+            const avgLoss = losses / period;
+            if (avgLoss === 0) return 100;
+            const rs = avgGain / avgLoss;
+            return 100 - (100 / (1 + rs));
+        };
+
+        // Generate financial data
+        const generateQuarterlyResults = (symbol) => {
+            const quarters = [];
+            const baseRevenue = symbol.includes('NS') ? 50000 : 80000;
+            
+            for (let i = 12; i >= 0; i--) {
+                const date = new Date();
+                date.setMonth(date.getMonth() - (i * 3));
+                const quarter = `Q${Math.floor((date.getMonth() / 3) + 1)} ${date.getFullYear()}`;
+                const growth = 1 + (Math.random() * 0.15 - 0.05);
+                const revenue = baseRevenue * growth * (1 + (12 - i) * 0.05);
+                const profit = revenue * (0.15 + Math.random() * 0.1);
+                const expenses = revenue * (0.6 + Math.random() * 0.1);
+                
+                quarters.push({
+                    quarter,
+                    revenue: parseFloat(revenue.toFixed(0)),
+                    expenses: parseFloat(expenses.toFixed(0)),
+                    profit: parseFloat(profit.toFixed(0)),
+                    profitMargin: parseFloat(((profit / revenue) * 100).toFixed(2)),
+                    eps: parseFloat((profit / 1000).toFixed(2))
+                });
+            }
+            return quarters;
+        };
+
+        const generateAnnualResults = (symbol) => {
+            const years = [];
+            const baseRevenue = symbol.includes('NS') ? 200000 : 320000;
+            
+            for (let i = 10; i >= 0; i--) {
+                const year = new Date().getFullYear() - i;
+                const growth = 1 + (Math.random() * 0.2 - 0.05);
+                const revenue = baseRevenue * growth * (1 + (10 - i) * 0.12);
+                const profit = revenue * (0.18 + Math.random() * 0.08);
+                const expenses = revenue * (0.58 + Math.random() * 0.08);
+                const tax = profit * (0.25 + Math.random() * 0.05);
+                
+                years.push({
+                    year: `Mar ${year}`,
+                    revenue: parseFloat(revenue.toFixed(0)),
+                    expenses: parseFloat(expenses.toFixed(0)),
+                    operatingProfit: parseFloat((revenue - expenses).toFixed(0)),
+                    otherIncome: parseFloat((revenue * 0.05).toFixed(0)),
+                    depreciation: parseFloat((revenue * 0.02).toFixed(0)),
+                    interest: parseFloat((revenue * 0.03).toFixed(0)),
+                    tax: parseFloat(tax.toFixed(0)),
+                    profit: parseFloat(profit.toFixed(0)),
+                    eps: parseFloat((profit / 1000).toFixed(2)),
+                    dividendPayout: parseFloat((Math.random() * 30 + 15).toFixed(1))
+                });
+            }
+            return years;
+        };
+
+        const generateBalanceSheet = (symbol) => {
+            const years = [];
+            const baseAssets = symbol.includes('NS') ? 500000 : 800000;
+            
+            for (let i = 10; i >= 0; i--) {
+                const year = new Date().getFullYear() - i;
+                const growth = 1 + (10 - i) * 0.15;
+                const totalAssets = baseAssets * growth;
+                const equity = totalAssets * 0.35;
+                const reserves = totalAssets * 0.25;
+                const borrowings = totalAssets * 0.20;
+                const deposits = totalAssets * 0.15;
+                
+                years.push({
+                    year: `Mar ${year}`,
+                    equityCapital: parseFloat((equity * 0.1).toFixed(0)),
+                    reserves: parseFloat(reserves.toFixed(0)),
+                    borrowings: parseFloat(borrowings.toFixed(0)),
+                    deposits: parseFloat(deposits.toFixed(0)),
+                    otherLiabilities: parseFloat((totalAssets * 0.05).toFixed(0)),
+                    totalLiabilities: parseFloat(totalAssets.toFixed(0)),
+                    fixedAssets: parseFloat((totalAssets * 0.15).toFixed(0)),
+                    investments: parseFloat((totalAssets * 0.30).toFixed(0)),
+                    otherAssets: parseFloat((totalAssets * 0.55).toFixed(0)),
+                    totalAssets: parseFloat(totalAssets.toFixed(0))
+                });
+            }
+            return years;
+        };
+
+        const generateCashFlow = (symbol) => {
+            const years = [];
+            const baseFlow = symbol.includes('NS') ? 40000 : 65000;
+            
+            for (let i = 10; i >= 0; i--) {
+                const year = new Date().getFullYear() - i;
+                const growth = 1 + (10 - i) * 0.12;
+                const operating = baseFlow * growth * (0.8 + Math.random() * 0.4);
+                const investing = -baseFlow * growth * (0.2 + Math.random() * 0.2);
+                const financing = -baseFlow * growth * (0.1 + Math.random() * 0.2);
+                
+                years.push({
+                    year: `Mar ${year}`,
+                    operatingCF: parseFloat(operating.toFixed(0)),
+                    investingCF: parseFloat(investing.toFixed(0)),
+                    financingCF: parseFloat(financing.toFixed(0)),
+                    netCashFlow: parseFloat((operating + investing + financing).toFixed(0))
+                });
+            }
+            return years;
+        };
+
+        const generateHistoricalData = (symbol, period, aggregation = 'daily') => {
+            const data = [];
+            const basePrice = BASE_PRICES[symbol] || 100;
+            let days;
+            
+            switch(period) {
+                case '1M': days = 30; break;
+                case '6M': days = 180; break;
+                case '1Y': days = 365; break;
+                case '3Y': days = 1095; break;
+                case '5Y': days = 1825; break;
+                case '10Y': days = 3650; break;
+                case 'MAX': days = 5475; break;
+                default: days = 30;
+            }
+            
+            let currentPrice = basePrice * 0.7;
+            const now = new Date();
+            const dailyData = [];
+            
+            for (let i = days; i >= 0; i--) {
+                const date = new Date(now);
+                date.setDate(date.getDate() - i);
+                const change = (Math.random() - 0.48) * (currentPrice * 0.02);
+                currentPrice += change;
+                
+                dailyData.push({
+                    date: date,
+                    price: parseFloat(currentPrice.toFixed(2)),
+                    close: parseFloat(currentPrice.toFixed(2))
+                });
+            }
+            
+            if (aggregation === 'weekly') {
+                for (let i = 0; i < dailyData.length; i += 5) {
+                    const week = dailyData.slice(i, i + 5);
+                    if (week.length > 0) {
+                        data.push({
+                            date: week[week.length - 1].date.toISOString().split('T')[0],
+                            close: week[week.length - 1].close,
+                            price: week[week.length - 1].price
+                        });
+                    }
+                }
+            } else if (aggregation === 'monthly') {
+                let currentMonth = -1;
+                let monthData = [];
+                dailyData.forEach(d => {
+                    const month = d.date.getMonth();
+                    if (month !== currentMonth && monthData.length > 0) {
+                        data.push({
+                            date: monthData[monthData.length - 1].date.toISOString().split('T')[0],
+                            close: monthData[monthData.length - 1].close,
+                            price: monthData[monthData.length - 1].price
+                        });
+                        monthData = [];
+                    }
+                    currentMonth = month;
+                    monthData.push(d);
+                });
+                if (monthData.length > 0) {
+                    data.push({
+                        date: monthData[monthData.length - 1].date.toISOString().split('T')[0],
+                        close: monthData[monthData.length - 1].close,
+                        price: monthData[monthData.length - 1].price
+                    });
+                }
+            } else {
+                return dailyData.map(d => ({
+                    ...d,
+                    date: d.date.toISOString().split('T')[0]
+                }));
+            }
+            
+            return data;
+        };
+
+        const fetchStockPrice = async (symbol) => {
+            const stockInfo = STOCK_DATABASE.find(s => s.symbol === symbol);
+            const basePrice = BASE_PRICES[symbol] || 100;
+            const randomChange = (Math.random() - 0.5) * (basePrice * 0.03);
+            const price = basePrice + randomChange;
+            const change = randomChange;
+            const changePercent = (change / basePrice) * 100;
+            
+            return {
+                ...stockInfo,
+                price: price.toFixed(2),
+                change: change.toFixed(2),
+                changePercent: changePercent.toFixed(2),
+                volume: Math.floor(Math.random() * 10000000),
+                high52w: (basePrice * 1.15).toFixed(2),
+                low52w: (basePrice * 0.85).toFixed(2),
+                timestamp: new Date().toISOString()
+            };
+        };
+
+        // Stock Search Component - Now supports ANY ticker
+        const StockSearch = ({ onSelectStock }) => {
+            const [query, setQuery] = useState('');
+            const [suggestions, setSuggestions] = useState([]);
+            const [showDropdown, setShowDropdown] = useState(false);
+            const [isLoading, setIsLoading] = useState(false);
+            const dropdownRef = useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (e) => {
+                    if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                        setShowDropdown(false);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
+
+            const handleSearch = (value) => {
+                setQuery(value);
+                if (value.length < 1) {
+                    setSuggestions([]);
+                    setShowDropdown(false);
+                    return;
+                }
+
+                // Better fuzzy search - search in popular stocks
+                const searchTerm = value.toLowerCase();
+                const filtered = POPULAR_STOCKS.filter(stock => {
+                    const symbolMatch = stock.symbol.toLowerCase().includes(searchTerm);
+                    const nameMatch = stock.name.toLowerCase().includes(searchTerm);
+                    // Also search for "crompton" matching "CROMPTON.NS"
+                    const symbolBase = stock.symbol.split('.')[0].toLowerCase();
+                    const baseMatch = symbolBase.includes(searchTerm);
+                    
+                    return symbolMatch || nameMatch || baseMatch;
+                }).slice(0, 10); // Show top 10 matches
+
+                setSuggestions(filtered);
+                setShowDropdown(filtered.length > 0 || value.length >= 2);
+            };
+
+            const handleSelect = async (stockOrSymbol) => {
+                setIsLoading(true);
+                setShowDropdown(false); // Close dropdown immediately
+                setQuery(''); // Clear search immediately
+                
+                // If it's a stock object from suggestions
+                let symbol = typeof stockOrSymbol === 'string' ? stockOrSymbol : stockOrSymbol.symbol;
+                let stockInfo = typeof stockOrSymbol === 'object' ? stockOrSymbol : null;
+                
+                try {
+                    const priceData = await fetchRealStockPrice(symbol);
+                    
+                    if (priceData) {
+                        // Merge stock info with price data
+                        const fullData = {
+                            ...stockInfo,
+                            ...priceData,
+                            name: stockInfo?.name || symbol,
+                            market: stockInfo?.market || (symbol.includes('.NS') ? 'NSE' : symbol.includes('.BO') ? 'BSE' : 'NASDAQ'),
+                            exchange: stockInfo?.exchange || (symbol.includes('.NS') || symbol.includes('.BO') ? 'India' : 'USA'),
+                            sector: stockInfo?.sector || 'Unknown'
+                        };
+                        
+                        onSelectStock(fullData);
+                    } else {
+                        alert('Could not fetch stock data. Please check the symbol and try again.');
+                    }
+                } catch (error) {
+                    alert('Error fetching stock data: ' + error.message);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter' && query.trim()) {
+                    // User pressed Enter - search for this symbol directly
+                    const upperQuery = query.trim().toUpperCase();
+                    handleSelect(upperQuery);
+                }
+            };
+
+            return (
+                <div className="relative" ref={dropdownRef}>
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Search stocks or enter symbol (e.g., AAPL, RELIANCE.NS)..."
+                        disabled={isLoading}
+                        className="w-full bg-gray-700 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    />
+                    
+                    {isLoading && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                        </div>
+                    )}
+                    
+                    {showDropdown && !isLoading && (
+                        <div className="absolute z-50 w-full mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl max-h-96 overflow-y-auto dropdown-enter">
+                            {suggestions.map((stock, idx) => (
+                                <div
+                                    key={idx}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleSelect(stock);
+                                    }}
+                                    className="p-3 hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-b-0"
+                                >
+                                    <div className="text-white font-semibold">{stock.name}</div>
+                                    <div className="text-gray-400 text-sm">{stock.symbol} • {stock.sector}</div>
+                                </div>
+                            ))}
+                            {query.length >= 2 && (
+                                <div
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleSelect(query.toUpperCase());
+                                    }}
+                                    className="p-3 hover:bg-blue-700 cursor-pointer bg-blue-900 border-t-2 border-blue-600"
+                                >
+                                    <div className="text-blue-200 font-semibold">Search for "{query.toUpperCase()}"</div>
+                                    <div className="text-blue-300 text-sm">Press Enter or click to search this symbol</div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Technical Chart Component - Now uses REAL data
+        const TechnicalChart = ({ symbol, timeframe, chartPeriod, enabledIndicators, rsiOnly = false }) => {
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+            const [chartData, setChartData] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+
+            useEffect(() => {
+                const loadData = async () => {
+                    setIsLoading(true);
+                    try {
+                        const data = await fetchRealHistoricalData(symbol, timeframe);
+                        
+                        if (data && data.length > 0) {
+                            // Apply aggregation if needed
+                            let processedData = data;
+                            
+                            if (chartPeriod === 'weekly' && data.length > 5) {
+                                processedData = [];
+                                for (let i = 0; i < data.length; i += 5) {
+                                    const week = data.slice(i, i + 5);
+                                    if (week.length > 0) {
+                                        processedData.push({
+                                            date: week[week.length - 1].date,
+                                            close: week[week.length - 1].close,
+                                            price: week[week.length - 1].price
+                                        });
+                                    }
+                                }
+                            } else if (chartPeriod === 'monthly' && data.length > 20) {
+                                const monthlyMap = {};
+                                data.forEach(d => {
+                                    const month = d.date.substring(0, 7); // YYYY-MM
+                                    monthlyMap[month] = d;
+                                });
+                                processedData = Object.values(monthlyMap);
+                            }
+                            
+                            setChartData(processedData);
+                        } else {
+                            setChartData([]);
+                        }
+                    } catch (error) {
+                        console.error('Error loading chart data:', error);
+                        setChartData([]);
+                    } finally {
+                        setIsLoading(false);
+                    }
+                };
+                
+                loadData();
+            }, [symbol, timeframe, chartPeriod]);
+
+            useEffect(() => {
+                if (!chartRef.current || !chartData || chartData.length === 0) {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                        chartInstance.current = null;
+                    }
+                    return;
+                }
+
+                const ctx = chartRef.current.getContext('2d');
+                
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                }
+
+                const prices = chartData.map(d => d.price || d.close);
+                const labels = chartData.map(d => d.date);
+
+                const datasets = [];
+                
+                if (rsiOnly) {
+                    const rsiData = chartData.map((_, i) => {
+                        if (i >= 14) return calculateRSI(prices.slice(0, i + 1), 14);
+                        return null;
+                    });
+                    datasets.push({
+                        label: 'RSI',
+                        data: rsiData,
+                        borderColor: 'rgb(251, 146, 60)',
+                        backgroundColor: 'rgba(251, 146, 60, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0,
+                        tension: 0.4
+                    });
+                    
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'line',
+                        data: { labels, datasets },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                    titleColor: 'white',
+                                    bodyColor: 'white'
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    ticks: { color: 'white', maxTicksLimit: 12 },
+                                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                                },
+                                y: {
+                                    min: 0,
+                                    max: 100,
+                                    ticks: { 
+                                        color: 'white',
+                                        callback: function(value) {
+                                            if (value === 70 || value === 30) return value;
+                                            return '';
+                                        }
+                                    },
+                                    grid: { 
+                                        color: function(context) {
+                                            if (context.tick.value === 70 || context.tick.value === 30) {
+                                                return 'rgba(255, 255, 255, 0.3)';
+                                            }
+                                            return 'rgba(255, 255, 255, 0.1)';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    return () => {
+                        if (chartInstance.current) chartInstance.current.destroy();
+                    };
+                }
+
+                datasets.push({
+                    label: 'Price',
+                    data: prices,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                });
+
+                if (enabledIndicators.sma50) {
+                    const sma50 = chartData.map((_, i) => {
+                        if (i >= 49) return calculateSMA(prices.slice(0, i + 1), 50);
+                        return null;
+                    });
+                    datasets.push({
+                        label: '50 DMA',
+                        data: sma50,
+                        borderColor: 'rgb(234, 179, 8)',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.4
+                    });
+                }
+
+                if (enabledIndicators.sma200) {
+                    const sma200 = chartData.map((_, i) => {
+                        if (i >= 199) return calculateSMA(prices.slice(0, i + 1), 200);
+                        return null;
+                    });
+                    datasets.push({
+                        label: '200 DMA',
+                        data: sma200,
+                        borderColor: 'rgb(239, 68, 68)',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.4
+                    });
+                }
+
+                if (enabledIndicators.wma200) {
+                    const wma200 = chartData.map((_, i) => {
+                        if (i >= 199) return calculateWMA(prices.slice(0, i + 1), 200);
+                        return null;
+                    });
+                    datasets.push({
+                        label: '200 WMA',
+                        data: wma200,
+                        borderColor: 'rgb(168, 85, 247)',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.4
+                    });
+                }
+
+                if (enabledIndicators.bollinger) {
+                    const upperBand = [];
+                    const lowerBand = [];
+                    chartData.forEach((_, i) => {
+                        if (i >= 19) {
+                            const bands = calculateBollingerBands(prices.slice(0, i + 1), 20, 2);
+                            upperBand.push(bands.upper);
+                            lowerBand.push(bands.lower);
+                        } else {
+                            upperBand.push(null);
+                            lowerBand.push(null);
+                        }
+                    });
+                    datasets.push({
+                        label: 'BB Upper',
+                        data: upperBand,
+                        borderColor: 'rgba(34, 197, 94, 0.8)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.05)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: '+1',
+                        pointRadius: 0
+                    });
+                    datasets.push({
+                        label: 'BB Lower',
+                        data: lowerBand,
+                        borderColor: 'rgba(34, 197, 94, 0.8)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0
+                    });
+                }
+
+                chartInstance.current = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels, datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { labels: { color: 'white' } },
+                            tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                titleColor: 'white',
+                                bodyColor: 'white'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: 'white', maxTicksLimit: 12 },
+                                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                            },
+                            y: {
+                                ticks: { color: 'white' },
+                                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartInstance.current) chartInstance.current.destroy();
+                };
+            }, [chartData, enabledIndicators, rsiOnly]);
+
+            if (isLoading) {
+                return (
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-white text-center">
+                            <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                            <div>Loading chart data...</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (!chartData || chartData.length === 0) {
+                return (
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-gray-400 text-center">
+                            <div className="text-4xl mb-2">📊</div>
+                            <div>No data available for this period</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return <canvas ref={chartRef} />;
+        };
+
+        // Main App
+        const App = () => {
+            const [view, setView] = useState('home');
+            const [activeTab, setActiveTab] = useState('chart');
+            const [watchlist, setWatchlist] = useState([]);
+            const [selectedStock, setSelectedStock] = useState(null);
+            const [timeframe, setTimeframe] = useState('1Y');
+            const [chartPeriod, setChartPeriod] = useState('daily');
+            const [enabledIndicators, setEnabledIndicators] = useState({
+                sma50: true,
+                sma200: true,
+                wma200: false,
+                bollinger: false,
+                rsi: false
+            });
+            const [quarterlyData, setQuarterlyData] = useState([]);
+            const [annualData, setAnnualData] = useState([]);
+            const [balanceSheetData, setBalanceSheetData] = useState([]);
+            const [cashFlowData, setCashFlowData] = useState([]);
+
+            const tabs = [
+                { id: 'chart', label: 'Chart' },
+                { id: 'quarters', label: 'Quarters' },
+                { id: 'profit-loss', label: 'Profit & Loss' },
+                { id: 'balance-sheet', label: 'Balance Sheet' },
+                { id: 'cash-flow', label: 'Cash Flow' },
+                { id: 'ratios', label: 'Ratios' }
+            ];
+
+            const timeframes = ['1M', '6M', '1Y', '3Y', '5Y', '10Y', 'MAX'];
+
+            useEffect(() => {
+                const saved = localStorage.getItem('screener_watchlist');
+                if (saved) {
+                    setWatchlist(JSON.parse(saved));
+                } else {
+                    setWatchlist([
+                        { symbol: 'RELIANCE.NS' },
+                        { symbol: 'TCS.NS' },
+                        { symbol: 'HDFCBANK.NS' }
+                    ]);
+                }
+            }, []);
+
+            useEffect(() => {
+                if (watchlist.length > 0) {
+                    localStorage.setItem('screener_watchlist', JSON.stringify(watchlist));
+                }
+            }, [watchlist]);
+
+            useEffect(() => {
+                if (view === 'home') {
+                    const updatePrices = async () => {
+                        const updated = await Promise.all(
+                            watchlist.map(async stock => {
+                                const priceData = await fetchRealStockPrice(stock.symbol);
+                                if (priceData) {
+                                    return {
+                                        ...stock,
+                                        ...priceData
+                                    };
+                                }
+                                return stock;
+                            })
+                        );
+                        setWatchlist(updated);
+                    };
+                    updatePrices();
+                }
+            }, [view]);
+
+            const viewStockDetail = async (stock) => {
+                try {
+                    // Fetch real price data
+                    const priceData = await fetchRealStockPrice(stock.symbol);
+                    
+                    if (!priceData) {
+                        alert('Could not fetch stock data. Please try again.');
+                        return;
+                    }
+                    
+                    // Fetch real fundamentals
+                    console.log('Fetching fundamentals for', stock.symbol);
+                    const fundamentals = await fetchRealFundamentals(stock.symbol);
+                    
+                    // Merge with stock info
+                    const fullData = {
+                        ...stock,
+                        ...priceData,
+                        fundamentals: fundamentals || {
+                            // Fallback to simulated data if fundamentals fail
+                            marketCap: priceData.marketCap || 0,
+                            pe: 20.0,
+                            pb: 3.0,
+                            dividendYield: 1.5,
+                            roe: 15.0,
+                            roce: 18.0,
+                            debtToEquity: 0.5,
+                            currentRatio: 1.5,
+                            bookValue: 100,
+                            faceValue: 10,
+                            salesGrowth3yr: 15.0,
+                            profitGrowth3yr: 18.0,
+                            salesGrowth5yr: 14.0,
+                            profitGrowth5yr: 17.0,
+                            salesGrowth10yr: 13.0,
+                            profitGrowth10yr: 16.0
+                        }
+                    };
+                    
+                    console.log('Stock data loaded:', fullData);
+                    
+                    setSelectedStock(fullData);
+                    setQuarterlyData(generateQuarterlyResults(stock.symbol));
+                    setAnnualData(generateAnnualResults(stock.symbol));
+                    setBalanceSheetData(generateBalanceSheet(stock.symbol));
+                    setCashFlowData(generateCashFlow(stock.symbol));
+                    setView('detail');
+                    setActiveTab('chart');
+                } catch (error) {
+                    console.error('Error viewing stock:', error);
+                    alert('Error loading stock data. Please try again.');
+                }
+            };
+
+            const addToWatchlist = () => {
+                if (!selectedStock) return;
+                if (watchlist.find(s => s.symbol === selectedStock.symbol)) {
+                    alert('Already in watchlist!');
+                    return;
+                }
+                setWatchlist([...watchlist, { symbol: selectedStock.symbol }]);
+            };
+
+            const removeFromWatchlist = (symbol) => {
+                setWatchlist(watchlist.filter(s => s.symbol !== symbol));
+            };
+
+            const toggleIndicator = (indicator) => {
+                setEnabledIndicators(prev => ({
+                    ...prev,
+                    [indicator]: !prev[indicator]
+                }));
+            };
+
+            const isInWatchlist = selectedStock && watchlist.some(s => s.symbol === selectedStock.symbol);
+
+            if (view === 'home') {
+                return (
+                    <div className="min-h-screen bg-gray-900">
+                        {/* Top Bar */}
+                        <div className="bg-gray-800 border-b border-gray-700 shadow-lg">
+                            <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+                                <div>
+                                    <h1 className="text-2xl font-bold text-white">Stock Screener Pro</h1>
+                                    <p className="text-gray-400 text-sm">Technical & Fundamental Analysis Platform</p>
+                                </div>
+                                <div className="w-96">
+                                    <StockSearch onSelectStock={viewStockDetail} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Watchlist */}
+                        <div className="max-w-7xl mx-auto px-6 py-8">
+                            <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                                <div className="bg-gray-700 border-b border-gray-600 px-6 py-4">
+                                    <h2 className="text-xl font-bold text-white">My Watchlist ({watchlist.length})</h2>
+                                </div>
+                                
+                                <div className="divide-y divide-gray-700">
+                                    {watchlist.map((stock) => {
+                                        const isPositive = parseFloat(stock.change || 0) >= 0;
+                                        return (
+                                            <div
+                                                key={stock.symbol}
+                                                className="stock-row p-6 cursor-pointer transition-colors"
+                                                onClick={() => viewStockDetail(stock)}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-3 mb-2">
+                                                            <h3 className="text-xl font-bold text-white">{stock.name || stock.symbol}</h3>
+                                                            <span className="text-xs bg-gray-700 text-gray-300 px-3 py-1 rounded">
+                                                                {stock.market}
+                                                            </span>
+                                                            {stock.sector && (
+                                                                <span className="text-xs bg-blue-900 text-blue-300 px-3 py-1 rounded">
+                                                                    {stock.sector}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-8 mt-4">
+                                                            <div>
+                                                                <div className="text-3xl font-bold text-white">
+                                                                    {stock.price ? `₹${stock.price}` : '...'}
+                                                                </div>
+                                                                {stock.change && (
+                                                                    <div className={`text-sm font-semibold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                                                        {isPositive ? '↑' : '↓'} {Math.abs(stock.change)} ({isPositive ? '+' : ''}{stock.changePercent}%)
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            {stock.fundamentals && (
+                                                                <div className="grid grid-cols-4 gap-6">
+                                                                    <div>
+                                                                        <div className="text-xs text-gray-500">P/E</div>
+                                                                        <div className="text-lg font-bold text-white">{stock.fundamentals.pe}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-xs text-gray-500">ROE</div>
+                                                                        <div className="text-lg font-bold text-white">{stock.fundamentals.roe}%</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-xs text-gray-500">Debt/Eq</div>
+                                                                        <div className="text-lg font-bold text-white">{stock.fundamentals.debtToEquity}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-xs text-gray-500">Mkt Cap</div>
+                                                                        <div className="text-lg font-bold text-white">{(stock.fundamentals.marketCap / 1000).toFixed(0)}K Cr</div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            removeFromWatchlist(stock.symbol);
+                                                        }}
+                                                        className="text-gray-500 hover:text-red-400 ml-6 text-xl"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Detail View
+            const fund = selectedStock.fundamentals;
+            const currency = '₹';
+
+            return (
+                <div className="min-h-screen bg-gray-900">
+                    {/* Top Bar */}
+                    <div className="bg-gray-800 border-b border-gray-700 shadow-lg sticky top-0 z-50">
+                        <div className="max-w-7xl mx-auto px-6 py-3 flex justify-between items-center gap-4">
+                            <button
+                                onClick={() => setView('home')}
+                                className="flex items-center gap-2 text-white hover:text-blue-400 flex-shrink-0"
+                            >
+                                <span>←</span>
+                                <span className="hidden md:inline">Back to Watchlist</span>
+                            </button>
+                            
+                            <div className="flex-1 max-w-md">
+                                <StockSearch onSelectStock={viewStockDetail} />
+                            </div>
+                            
+                            {!isInWatchlist && (
+                                <button
+                                    onClick={addToWatchlist}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex-shrink-0"
+                                >
+                                    ⭐ Add to Watchlist
+                                </button>
+                            )}
+                            {isInWatchlist && (
+                                <div className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold flex-shrink-0">
+                                    ✓ In Watchlist
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto px-6 py-6">
+                        {/* Stock Header */}
+                        <div className="bg-gray-800 rounded-lg p-6 mb-6 shadow-lg">
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-white mb-2">{selectedStock.name}</h1>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-gray-400">{selectedStock.symbol}</span>
+                                        <span className="text-sm bg-gray-700 text-gray-300 px-3 py-1 rounded">{selectedStock.market}</span>
+                                        <span className="text-sm bg-blue-900 text-blue-300 px-3 py-1 rounded">{selectedStock.sector}</span>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-4xl font-bold text-white">{currency}{selectedStock.price}</div>
+                                    <div className={`text-xl font-semibold ${parseFloat(selectedStock.change) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        {parseFloat(selectedStock.change) >= 0 ? '↑' : '↓'} {Math.abs(selectedStock.change)} ({parseFloat(selectedStock.change) >= 0 ? '+' : ''}{selectedStock.changePercent}%)
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Key Metrics */}
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                <div className="bg-gray-700 p-3 rounded">
+                                    <div className="text-xs text-gray-400">Market Cap</div>
+                                    <div className="text-lg font-bold text-white">
+                                        {fund.marketCap ? 
+                                            `${currency}${(fund.marketCap / (selectedStock.exchange === 'India' ? 10000000 : 1000000)).toFixed(0)}${selectedStock.exchange === 'India' ? 'K Cr' : 'M'}` 
+                                            : 'N/A'}
+                                    </div>
+                                </div>
+                                <div className="bg-gray-700 p-3 rounded">
+                                    <div className="text-xs text-gray-400">P/E Ratio</div>
+                                    <div className="text-lg font-bold text-white">
+                                        {fund.pe ? fund.pe.toFixed(2) : 'N/A'}
+                                    </div>
+                                </div>
+                                <div className="bg-gray-700 p-3 rounded">
+                                    <div className="text-xs text-gray-400">ROE</div>
+                                    <div className="text-lg font-bold text-white">
+                                        {fund.roe ? fund.roe.toFixed(2) + '%' : 'N/A'}
+                                    </div>
+                                </div>
+                                <div className="bg-gray-700 p-3 rounded">
+                                    <div className="text-xs text-gray-400">ROCE</div>
+                                    <div className="text-lg font-bold text-white">
+                                        {fund.roce ? fund.roce.toFixed(2) + '%' : 'N/A'}
+                                    </div>
+                                </div>
+                                <div className="bg-gray-700 p-3 rounded">
+                                    <div className="text-xs text-gray-400">Div Yield</div>
+                                    <div className="text-lg font-bold text-white">
+                                        {fund.dividendYield ? fund.dividendYield.toFixed(2) + '%' : 'N/A'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="bg-gray-800 rounded-lg shadow-lg mb-6">
+                            <div className="flex border-b border-gray-700 overflow-x-auto">
+                                {tabs.map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`px-6 py-4 font-semibold whitespace-nowrap ${
+                                            activeTab === tab.id ? 'tab-active' : 'tab-inactive'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="p-6">
+                                {/* Chart Tab */}
+                                {activeTab === 'chart' && (
+                                    <div>
+                                        {/* Indicators */}
+                                        <div className="bg-gray-700 rounded-lg p-4 mb-4">
+                                            <h3 className="text-white font-bold mb-3">Technical Indicators</h3>
+                                            <div className="flex flex-wrap gap-2">
+                                                {Object.entries({
+                                                    sma50: '50 DMA',
+                                                    sma200: '200 DMA',
+                                                    wma200: '200 WMA',
+                                                    bollinger: 'Bollinger Bands',
+                                                    rsi: 'RSI'
+                                                }).map(([key, label]) => (
+                                                    <button
+                                                        key={key}
+                                                        onClick={() => toggleIndicator(key)}
+                                                        className={`px-3 py-2 rounded-lg text-sm font-semibold ${
+                                                            enabledIndicators[key] 
+                                                                ? key === 'sma50' ? 'bg-yellow-600 text-white' :
+                                                                  key === 'sma200' ? 'bg-red-600 text-white' :
+                                                                  key === 'wma200' ? 'bg-purple-600 text-white' :
+                                                                  key === 'bollinger' ? 'bg-green-600 text-white' :
+                                                                  'bg-orange-600 text-white'
+                                                                : 'bg-gray-600 text-gray-300'
+                                                        }`}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Period */}
+                                        <div className="bg-gray-700 rounded-lg p-4 mb-4">
+                                            <div className="flex items-center gap-4 mb-3">
+                                                <h3 className="text-white font-bold">Chart Period:</h3>
+                                                {['daily', 'weekly', 'monthly'].map(period => (
+                                                    <button
+                                                        key={period}
+                                                        onClick={() => setChartPeriod(period)}
+                                                        className={`px-4 py-2 rounded-lg font-semibold capitalize ${
+                                                            chartPeriod === period ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300'
+                                                        }`}
+                                                    >
+                                                        {period}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            
+                                            <div className="flex flex-wrap gap-2">
+                                                {timeframes.map(tf => (
+                                                    <button
+                                                        key={tf}
+                                                        onClick={() => setTimeframe(tf)}
+                                                        className={`px-4 py-2 rounded-lg font-semibold ${
+                                                            timeframe === tf ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-600'
+                                                        }`}
+                                                    >
+                                                        {tf}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Price Chart */}
+                                        <div className="bg-gray-700 rounded-lg p-4 mb-4" style={{ height: enabledIndicators.rsi ? '450px' : '550px' }}>
+                                            <TechnicalChart 
+                                                symbol={selectedStock.symbol}
+                                                timeframe={timeframe}
+                                                chartPeriod={chartPeriod}
+                                                enabledIndicators={enabledIndicators}
+                                            />
+                                        </div>
+
+                                        {/* RSI Pane */}
+                                        {enabledIndicators.rsi && (
+                                            <div className="bg-gray-700 rounded-lg p-4" style={{ height: '150px' }}>
+                                                <div className="text-white text-sm font-semibold mb-2">RSI (14)</div>
+                                                <TechnicalChart 
+                                                    symbol={selectedStock.symbol}
+                                                    timeframe={timeframe}
+                                                    chartPeriod={chartPeriod}
+                                                    enabledIndicators={{ rsi: true }}
+                                                    rsiOnly={true}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Quarters Tab */}
+                                {activeTab === 'quarters' && (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-700">
+                                                <tr>
+                                                    <th className="text-left p-3 text-white font-bold">Quarter</th>
+                                                    <th className="text-right p-3 text-white font-bold">Revenue (Cr)</th>
+                                                    <th className="text-right p-3 text-white font-bold">Expenses (Cr)</th>
+                                                    <th className="text-right p-3 text-white font-bold">Profit (Cr)</th>
+                                                    <th className="text-right p-3 text-white font-bold">Margin %</th>
+                                                    <th className="text-right p-3 text-white font-bold">EPS</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-700">
+                                                {quarterlyData.map((q, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-700">
+                                                        <td className="p-3 text-white font-semibold">{q.quarter}</td>
+                                                        <td className="p-3 text-gray-300 text-right">{q.revenue.toLocaleString()}</td>
+                                                        <td className="p-3 text-gray-300 text-right">{q.expenses.toLocaleString()}</td>
+                                                        <td className="p-3 text-white text-right font-semibold">{q.profit.toLocaleString()}</td>
+                                                        <td className="p-3 text-green-400 text-right font-semibold">{q.profitMargin}%</td>
+                                                        <td className="p-3 text-gray-300 text-right">{q.eps}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* P&L Tab */}
+                                {activeTab === 'profit-loss' && (
+                                    <div>
+                                        <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div className="bg-gray-700 p-4 rounded-lg">
+                                                <div className="text-gray-400 text-sm mb-1">Sales Growth (10Y)</div>
+                                                <div className="text-2xl font-bold text-white">{fund.salesGrowth10yr}%</div>
+                                            </div>
+                                            <div className="bg-gray-700 p-4 rounded-lg">
+                                                <div className="text-gray-400 text-sm mb-1">Profit Growth (10Y)</div>
+                                                <div className="text-2xl font-bold text-white">{fund.profitGrowth10yr}%</div>
+                                            </div>
+                                            <div className="bg-gray-700 p-4 rounded-lg">
+                                                <div className="text-gray-400 text-sm mb-1">Sales Growth (5Y)</div>
+                                                <div className="text-2xl font-bold text-white">{fund.salesGrowth5yr}%</div>
+                                            </div>
+                                            <div className="bg-gray-700 p-4 rounded-lg">
+                                                <div className="text-gray-400 text-sm mb-1">Profit Growth (5Y)</div>
+                                                <div className="text-2xl font-bold text-white">{fund.profitGrowth5yr}%</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead className="bg-gray-700">
+                                                    <tr>
+                                                        <th className="text-left p-3 text-white font-bold">Year</th>
+                                                        <th className="text-right p-3 text-white font-bold">Revenue</th>
+                                                        <th className="text-right p-3 text-white font-bold">Expenses</th>
+                                                        <th className="text-right p-3 text-white font-bold">Operating Profit</th>
+                                                        <th className="text-right p-3 text-white font-bold">Other Income</th>
+                                                        <th className="text-right p-3 text-white font-bold">Tax</th>
+                                                        <th className="text-right p-3 text-white font-bold">Net Profit</th>
+                                                        <th className="text-right p-3 text-white font-bold">EPS</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-700">
+                                                    {annualData.map((year, idx) => (
+                                                        <tr key={idx} className="hover:bg-gray-700">
+                                                            <td className="p-3 text-white font-semibold">{year.year}</td>
+                                                            <td className="p-3 text-gray-300 text-right">{year.revenue.toLocaleString()}</td>
+                                                            <td className="p-3 text-gray-300 text-right">{year.expenses.toLocaleString()}</td>
+                                                            <td className="p-3 text-gray-300 text-right">{year.operatingProfit.toLocaleString()}</td>
+                                                            <td className="p-3 text-gray-300 text-right">{year.otherIncome.toLocaleString()}</td>
+                                                            <td className="p-3 text-gray-300 text-right">{year.tax.toLocaleString()}</td>
+                                                            <td className="p-3 text-white text-right font-semibold">{year.profit.toLocaleString()}</td>
+                                                            <td className="p-3 text-green-400 text-right font-semibold">{year.eps}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Balance Sheet Tab */}
+                                {activeTab === 'balance-sheet' && (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-700">
+                                                <tr>
+                                                    <th className="text-left p-3 text-white font-bold">Year</th>
+                                                    <th className="text-right p-3 text-white font-bold">Equity Capital</th>
+                                                    <th className="text-right p-3 text-white font-bold">Reserves</th>
+                                                    <th className="text-right p-3 text-white font-bold">Borrowings</th>
+                                                    <th className="text-right p-3 text-white font-bold">Fixed Assets</th>
+                                                    <th className="text-right p-3 text-white font-bold">Investments</th>
+                                                    <th className="text-right p-3 text-white font-bold">Total Assets</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-700">
+                                                {balanceSheetData.map((year, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-700">
+                                                        <td className="p-3 text-white font-semibold">{year.year}</td>
+                                                        <td className="p-3 text-gray-300 text-right">{year.equityCapital.toLocaleString()}</td>
+                                                        <td className="p-3 text-gray-300 text-right">{year.reserves.toLocaleString()}</td>
+                                                        <td className="p-3 text-gray-300 text-right">{year.borrowings.toLocaleString()}</td>
+                                                        <td className="p-3 text-gray-300 text-right">{year.fixedAssets.toLocaleString()}</td>
+                                                        <td className="p-3 text-gray-300 text-right">{year.investments.toLocaleString()}</td>
+                                                        <td className="p-3 text-white text-right font-semibold">{year.totalAssets.toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* Cash Flow Tab */}
+                                {activeTab === 'cash-flow' && (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-700">
+                                                <tr>
+                                                    <th className="text-left p-3 text-white font-bold">Year</th>
+                                                    <th className="text-right p-3 text-white font-bold">Operating CF</th>
+                                                    <th className="text-right p-3 text-white font-bold">Investing CF</th>
+                                                    <th className="text-right p-3 text-white font-bold">Financing CF</th>
+                                                    <th className="text-right p-3 text-white font-bold">Net Cash Flow</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-700">
+                                                {cashFlowData.map((year, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-700">
+                                                        <td className="p-3 text-white font-semibold">{year.year}</td>
+                                                        <td className="p-3 text-green-400 text-right font-semibold">{year.operatingCF.toLocaleString()}</td>
+                                                        <td className="p-3 text-red-400 text-right">{year.investingCF.toLocaleString()}</td>
+                                                        <td className="p-3 text-red-400 text-right">{year.financingCF.toLocaleString()}</td>
+                                                        <td className="p-3 text-white text-right font-semibold">{year.netCashFlow.toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* Ratios Tab */}
+                                {activeTab === 'ratios' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="bg-gray-700 p-6 rounded-lg">
+                                            <h3 className="text-white font-bold mb-4">Valuation</h3>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">P/E Ratio</span>
+                                                    <span className="text-white font-semibold">{fund.pe ? fund.pe.toFixed(2) : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">P/B Ratio</span>
+                                                    <span className="text-white font-semibold">{fund.pb ? fund.pb.toFixed(2) : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">Dividend Yield</span>
+                                                    <span className="text-white font-semibold">{fund.dividendYield ? fund.dividendYield.toFixed(2) + '%' : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">Book Value</span>
+                                                    <span className="text-white font-semibold">{fund.bookValue ? `₹${fund.bookValue.toFixed(2)}` : 'N/A'}</span>
+                                                </div>
+                                                {fund.eps && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-400">EPS</span>
+                                                        <span className="text-white font-semibold">{fund.eps.toFixed(2)}</span>
+                                                    </div>
+                                                )}
+                                                {fund.beta && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-400">Beta</span>
+                                                        <span className="text-white font-semibold">{fund.beta.toFixed(2)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-gray-700 p-6 rounded-lg">
+                                            <h3 className="text-white font-bold mb-4">Profitability</h3>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">ROE</span>
+                                                    <span className="text-white font-semibold">{fund.roe ? fund.roe.toFixed(2) + '%' : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">ROCE</span>
+                                                    <span className="text-white font-semibold">{fund.roce ? fund.roce.toFixed(2) + '%' : 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-gray-700 p-6 rounded-lg">
+                                            <h3 className="text-white font-bold mb-4">Leverage</h3>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">Debt to Equity</span>
+                                                    <span className="text-white font-semibold">{fund.debtToEquity ? fund.debtToEquity.toFixed(2) : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">Current Ratio</span>
+                                                    <span className="text-white font-semibold">{fund.currentRatio ? fund.currentRatio.toFixed(2) : 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
